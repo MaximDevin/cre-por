@@ -1,0 +1,75 @@
+{
+ "timestamp": "",
+ "reserve_btc": 20095612,
+ "wrapped_by_chain": {
+  "bsc": 65300.96996478413,
+  "ethereum": 116132.18273262
+ },
+ "wrapped_total_btc": 181433.15269740415,
+ "coverage_ratio": 110.76041892694023,
+ "reserve_price_usd": 82683,
+ "spot_price_usd": 82724.39,
+ "price_deviation_pct": 0.05005865776519891,
+ "checks": [
+  {
+   "id": "identity.ethereum",
+   "pass": true,
+   "detail": {
+    "expected": "WBTC",
+    "observed": "WBTC",
+    "rule": "symbol() on-chain must match the expected asset",
+    "token": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599"
+   }
+  },
+  {
+   "id": "liveness.ethereum",
+   "pass": true,
+   "detail": {
+    "rule": "wrapped supply must be readable and greater than zero",
+    "total_supply": 116132.18273262
+   }
+  },
+  {
+   "id": "identity.bsc",
+   "pass": true,
+   "detail": {
+    "expected": "BTCB",
+    "observed": "BTCB",
+    "rule": "symbol() on-chain must match the expected asset",
+    "token": "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c"
+   }
+  },
+  {
+   "id": "liveness.bsc",
+   "pass": true,
+   "detail": {
+    "rule": "wrapped supply must be readable and greater than zero",
+    "total_supply": 65300.96996478413
+   }
+  },
+  {
+   "id": "reserve_floor",
+   "pass": true,
+   "detail": {
+    "min_coverage": 1,
+    "observed_coverage": 110.76041892694023,
+    "reserve_btc": 20095612,
+    "rule": "BTC circulating supply / total wrapped BTC \u003e= MinCoverageRatio",
+    "wrapped_btc": 181433.15269740415
+   }
+  },
+  {
+   "id": "price_agreement",
+   "pass": true,
+   "detail": {
+    "binance_usd": 82724.39,
+    "coingecko_usd": 82683,
+    "max_deviation": 0.5,
+    "observed_pct": 0.05005865776519891,
+    "rule": "Binance vs CoinGecko spot deviation \u003c= MaxPriceDeviationPct"
+   }
+  }
+ ],
+ "pass": true,
+ "trail_head": "0af26a3aabfb9c38"
+}
