@@ -1,0 +1,11 @@
+{
+  "schedule": "0 */15 * * * *",
+  "coinGeckoUrl": "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin",
+  "binanceUrl": "https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT",
+  "ethereumRpc": "https://ethereum.publicnode.com",
+  "ethereumWbtc": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+  "bscRpc": "https://bsc-dataseed.binance.org",
+  "bscBtcb": "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c",
+  "expectWbtc": "WBTC",
+  "expectBtcb": "BTCB"
+}

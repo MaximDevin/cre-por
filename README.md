@@ -36,11 +36,28 @@ return cre.Workflow[Config]{
 | Capability: EVM Read | ERC-20 reads on Ethereum and BNB Chain (no writes, ever) |
 | Output | hash-chained verdict + `report.json` |
 
-`cmd/por-run` runs **that exact callback body** locally and emits the same
-artifacts the on-network workflow would, because deploying/running on the CRE
-network requires a CRE account that is **wallet-authenticated** — and we hold
-no private keys, so we cannot authenticate (documented blocker, not a shortcut
-we faked). Everything else is real: real chain reads, real APIs, real hashing.
+**The deployable workflow is in `workflow/`** (see §8) and compiles to WASM
+against the real SDKs:
+
+```bash
+GOOS=wasip1 GOARCH=wasm go build -o por.wasm ./workflow   # -> por.wasm, 15 MB
+```
+
+```go
+// workflow/workflow.go - the same published rules, wired for the network
+func InitWorkflow(config *Config, _ *slog.Logger, _ cre.SecretsProvider) (cre.Workflow[*Config], error) {
+	return cre.Workflow[*Config]{
+		cre.Handler(cron.Trigger(&cron.Config{Schedule: config.Schedule}), onProofOfReserveCron),
+	}, nil
+}
+```
+
+`cmd/por-run` runs **that exact callback body** locally with the same rules
+(`internal/por.Evaluate` is shared, transport-independent), because
+registering/running the workflow on the CRE network requires a CRE account that
+is **wallet-authenticated** — and we hold no private keys, so we cannot
+authenticate (documented blocker, not a shortcut we faked). Everything else is
+real: real chain reads, real APIs, real hashing, real WASM build.
 
 ## 2. What it checks (published rules, all in `internal/por`)
 
@@ -133,7 +150,32 @@ go run ./cmd/por-run -schedule "0 */15 * * * *"   # schedule metadata for regist
 
 Outputs: `data/evidence.json`, `data/report.json`, `data/trail.jsonl`.
 
-## 8. Limits & honesty notes
+## 8. On-network deployment (wired, blocked only by account auth)
+
+`workflow/` is a complete CRE workflow project in the official layout
+(mirroring `smartcontractkit/cre-templates` Go building blocks):
+
+| file | purpose |
+|---|---|
+| `workflow/main.go` | `//go:build wasip1` entrypoint: `wasm.NewRunner(cre.ParseJSON[Config]).Run(InitWorkflow)` |
+| `workflow/workflow.go` | CRON trigger + callback; every fetch goes through the CRE **HTTP capability** (`crehttp.SendRequest`, consensus-gated), never `net/http` |
+| `workflow/config.{staging,production}.json` | schedule + public endpoints + token addresses |
+| `workflow/workflow.yaml`, `project.yaml` | CRE CLI target settings (workflow names, RPCs — all public, key-less) |
+
+SDKs used (fetched from proxy.golang.org and compiled against):
+`github.com/smartcontractkit/cre-sdk-go v1.0.0`,
+`.../capabilities/scheduler/cron v1.0.0-beta.0`,
+`.../capabilities/networking/http v1.0.0-beta.0`.
+
+Remaining step (blocked for us): `cre` CLI account creation + workflow
+registration, which is wallet-authenticated — we hold no keys by hard rule.
+Anyone with a CRE account can register it as-is:
+
+```bash
+cre  # login, then register with project.yaml/workflow.yaml targets
+```
+
+## 9. Limits & honesty notes
 
 * **On-network deployment is not done here**: registering a workflow with the
   CRE network requires a CRE account, whose authentication is wallet-based. We

@@ -121,3 +121,22 @@ outputs          : data/{evidence.json,report.json,trail.jsonl}
  "pass": true,
  "trail_head": "0af26a3aabfb9c38"
 }```
+
+## 5. CRE workflow WASM build (2026-10-11)
+
+```
+$ GOOS=wasip1 GOARCH=wasm go build -o por.wasm ./workflow
+-rwxr-xr-x 1 znao znao 15008288 Oct 11 11:04 /tmp/por.wasm
+
+$ go build ./... && go vet ./... && go test ./...
+?   	farmo.dev/cre-por/cmd/por-run	[no test files]
+ok  	farmo.dev/cre-por/internal/evidence	(cached)
+ok  	farmo.dev/cre-por/internal/por	(cached)
+
+go.mod requires:
+	github.com/smartcontractkit/cre-sdk-go v1.0.0
+	github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http v1.0.0-beta.0
+	github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron v1.0.0-beta.0
+	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20250918131840-564fe2776a35
+	google.golang.org/protobuf v1.36.7
+```

@@ -179,13 +179,36 @@ func decodeStringABI(hexResult string) string {
 	return string(out)
 }
 
+// ParseTokenRead assembles a TokenRead from raw eth_call results. It is the
+// seam between a transport (net/http locally, the CRE HTTP capability on
+// network) and the published checks.
+func ParseTokenRead(chain Chain, symbolHex, decimalsHex, supplyHex string) (TokenRead, error) {
+	read := TokenRead{RawCall: RawCall{Chain: chain.Name, RPC: chain.RPC, To: chain.Token}}
+	read.Symbol = decodeStringABI(symbolHex)
+	d, err := decodeUintABI(decimalsHex)
+	if err != nil {
+		return read, fmt.Errorf("%s decimals: %w", chain.Name, err)
+	}
+	read.Decimals = int(d.Int64())
+	raw, err := decodeUintABI(supplyHex)
+	if err != nil {
+		return read, fmt.Errorf("%s totalSupply: %w", chain.Name, err)
+	}
+	read.SupplyRaw = supplyHex
+	read.Supply = bigToFloat(raw, read.Decimals)
+	return read, nil
+}
+
 // TokenRead is one verified on-chain reading.
 type TokenRead struct {
 	RawCall
-	Symbol    string  `json:"symbol"`
-	Decimals  int     `json:"decimals"`
-	SupplyRaw string  `json:"supply_raw"`
-	Supply    float64 `json:"supply"`
+	Chain          string  `json:"chain"`
+	Token          string  `json:"token"`
+	ExpectedSymbol string  `json:"expected_symbol,omitempty"`
+	Symbol         string  `json:"symbol"`
+	Decimals       int     `json:"decimals"`
+	SupplyRaw      string  `json:"supply_raw"`
+	Supply         float64 `json:"supply"`
 }
 
 // ReadToken fetches symbol(), decimals() and totalSupply() for one chain.
@@ -320,93 +343,54 @@ type Report struct {
 	TrailHead         string             `json:"trail_head"`
 }
 
-// Run performs the full check and returns the report plus the evidence items
-// it consumed (kind/tag pairs the caller persists to the trail).
+// RunResult bundles the verdict with the evidence items consumed by it.
 type RunResult struct {
-	Report   Report
-	Evidence []map[string]any // serialized evidence records
-	Raw      []RawCall        // exact RPC exchanges
+	Report   Report           `json:"report"`
+	Evidence []map[string]any `json:"evidence"` // serialized evidence records
+	Raw      []RawCall        `json:"raw"`      // exact RPC exchanges
 }
 
-// Run executes the workflow callback body with the given context.
-func (c *Client) Run(ctx context.Context) (RunResult, error) {
-	res := RunResult{Report: Report{WrappedByChain: map[string]float64{}}}
+// Evaluate applies the published checks to already-fetched values. It is the
+// transport-independent core shared by the local runner and the CRE workflow.
+func Evaluate(mkt MarketSnapshot, tick BinanceTicker, reads []TokenRead) Report {
+	rep := Report{WrappedByChain: map[string]float64{}}
 	var checks []CheckResult
-	var evidenceIDs []string
-
-	add := func(kind, source, url string, payload map[string]any, id *string) {
-		_ = id
-		res.Evidence = append(res.Evidence, map[string]any{
-			"kind": kind, "source": source, "url": url, "payload": payload,
-		})
-		_ = evidenceIDs
-	}
-
-	// 1) reserve side: BTC circulating supply (CoinGecko)
-	mkt, err := c.ReadCoinGecko(ctx)
-	if err != nil {
-		return res, fmt.Errorf("reserve read: %w", err)
-	}
-	res.Report.ReserveBTC = mkt.CirculatingSupply
-	res.Report.ReservePriceUSD = mkt.CurrentPrice
-	add("reserve.coingecko", "CoinGecko public API", c.CoinGecko, map[string]any{
-		"circulating_supply": mkt.CirculatingSupply, "usd": mkt.CurrentPrice}, nil)
-
-	// 2) liability side: wrapped BTC supplies read on-chain
 	total := 0.0
-	for _, chain := range c.Chains {
-		read, err := c.ReadToken(ctx, chain)
-		if err != nil {
-			return res, fmt.Errorf("chain %s: %w", chain.Name, err)
-		}
-		res.Raw = append(res.Raw, read.RawCall)
-		res.Report.WrappedByChain[chain.Name] = read.Supply
+	for _, read := range reads {
+		rep.WrappedByChain[read.Chain] = read.Supply
 		total += read.Supply
-		add("supply.onchain", chain.Name+" JSON-RPC", chain.RPC, map[string]any{
-			"token": chain.Token, "symbol": read.Symbol, "decimals": read.Decimals,
-			"total_supply": read.Supply, "raw": read.SupplyRaw}, nil)
-
-		symbolOK := read.Symbol == chain.ExpectSymbol
+		expect := read.ExpectedSymbol
 		checks = append(checks, CheckResult{
-			ID: "identity." + chain.Name, Pass: symbolOK,
-			Detail: map[string]any{"expected": chain.ExpectSymbol, "observed": read.Symbol,
-				"token": chain.Token, "rule": "symbol() on-chain must match the expected asset"},
+			ID: "identity." + read.Chain, Pass: expect == "" || read.Symbol == expect,
+			Detail: map[string]any{"expected": expect, "observed": read.Symbol,
+				"token": read.Token, "rule": "symbol() on-chain must match the expected asset"},
 		})
 		checks = append(checks, CheckResult{
-			ID: "liveness." + chain.Name, Pass: read.Supply > 0,
+			ID: "liveness." + read.Chain, Pass: read.Supply > 0,
 			Detail: map[string]any{"total_supply": read.Supply,
 				"rule": "wrapped supply must be readable and greater than zero"},
 		})
 	}
-	res.Report.WrappedTotalBTC = total
-
-	// 3) coverage: wrapped claims must not exceed the circulating reserve floor
-	res.Report.CoverageRatio = 0
+	rep.ReserveBTC = mkt.CirculatingSupply
+	rep.ReservePriceUSD = mkt.CurrentPrice
+	rep.WrappedTotalBTC = total
 	if total > 0 {
-		res.Report.CoverageRatio = mkt.CirculatingSupply / total
+		rep.CoverageRatio = mkt.CirculatingSupply / total
 	}
 	checks = append(checks, CheckResult{
-		ID: "reserve_floor", Pass: res.Report.CoverageRatio >= MinCoverageRatio,
+		ID: "reserve_floor", Pass: rep.CoverageRatio >= MinCoverageRatio,
 		Detail: map[string]any{
 			"rule":              "BTC circulating supply / total wrapped BTC >= MinCoverageRatio",
 			"min_coverage":      MinCoverageRatio,
-			"observed_coverage": res.Report.CoverageRatio,
+			"observed_coverage": rep.CoverageRatio,
 			"reserve_btc":       mkt.CirculatingSupply, "wrapped_btc": total},
 	})
-
-	// 4) price agreement: two independent public sources
-	tick, err := c.ReadBinance(ctx)
-	if err != nil {
-		return res, fmt.Errorf("spot read: %w", err)
-	}
-	res.Report.SpotPriceUSD = tick.LastPrice
-	add("price.binance", "Binance public REST", c.Binance,
-		map[string]any{"last_price": tick.LastPrice}, nil)
+	rep.SpotPriceUSD = tick.LastPrice
 	dev := 0.0
 	if mkt.CurrentPrice > 0 {
 		dev = 100 * abs(tick.LastPrice-mkt.CurrentPrice) / mkt.CurrentPrice
 	}
-	res.Report.PriceDeviationPct = dev
+	rep.PriceDeviationPct = dev
 	checks = append(checks, CheckResult{
 		ID: "price_agreement", Pass: dev <= MaxPriceDeviationPct,
 		Detail: map[string]any{
@@ -415,14 +399,56 @@ func (c *Client) Run(ctx context.Context) (RunResult, error) {
 			"observed_pct":  dev,
 			"binance_usd":   tick.LastPrice, "coingecko_usd": mkt.CurrentPrice},
 	})
-
-	res.Report.Checks = checks
-	res.Report.Pass = true
-	for _, ch := range checks {
-		if !ch.Pass {
-			res.Report.Pass = false
+	rep.Checks = checks
+	rep.Pass = true
+	for _, c := range checks {
+		if !c.Pass {
+			rep.Pass = false
 		}
 	}
+	return rep
+}
+
+// Run performs the full check with the net/http transport and returns the
+// report plus the evidence it consumed.
+func (c *Client) Run(ctx context.Context) (RunResult, error) {
+	res := RunResult{}
+	add := func(kind, source, url string, payload map[string]any) {
+		res.Evidence = append(res.Evidence, map[string]any{
+			"kind": kind, "source": source, "url": url, "payload": payload})
+	}
+
+	mkt, err := c.ReadCoinGecko(ctx)
+	if err != nil {
+		return res, fmt.Errorf("reserve read: %w", err)
+	}
+	add("reserve.coingecko", "CoinGecko public API", c.CoinGecko, map[string]any{
+		"circulating_supply": mkt.CirculatingSupply, "usd": mkt.CurrentPrice})
+
+	var reads []TokenRead
+	for _, chain := range c.Chains {
+		read, err := c.ReadToken(ctx, chain)
+		if err != nil {
+			return res, fmt.Errorf("chain %s: %w", chain.Name, err)
+		}
+		read.Chain = chain.Name
+		read.Token = chain.Token
+		read.ExpectedSymbol = chain.ExpectSymbol
+		res.Raw = append(res.Raw, read.RawCall)
+		reads = append(reads, read)
+		add("supply.onchain", chain.Name+" JSON-RPC", chain.RPC, map[string]any{
+			"token": chain.Token, "symbol": read.Symbol, "decimals": read.Decimals,
+			"total_supply": read.Supply, "raw": read.SupplyRaw})
+	}
+
+	tick, err := c.ReadBinance(ctx)
+	if err != nil {
+		return res, fmt.Errorf("spot read: %w", err)
+	}
+	add("price.binance", "Binance public REST", c.Binance,
+		map[string]any{"last_price": tick.LastPrice})
+
+	res.Report = Evaluate(mkt, tick, reads)
 	return res, nil
 }
 

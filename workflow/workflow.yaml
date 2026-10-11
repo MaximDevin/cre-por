@@ -1,0 +1,16 @@
+# CRE CLI workflow settings (mirrors smartcontractkit/cre-templates layout).
+staging-settings:
+  user-workflow:
+    workflow-name: "cre-por-staging"
+  workflow-artifacts:
+    workflow-path: "."
+    config-path: "./config.staging.json"
+    secrets-path: ""
+
+production-settings:
+  user-workflow:
+    workflow-name: "cre-por-production"
+  workflow-artifacts:
+    workflow-path: "."
+    config-path: "./config.production.json"
+    secrets-path: ""

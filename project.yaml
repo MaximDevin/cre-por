@@ -1,0 +1,16 @@
+# CRE CLI project settings (mirrors smartcontractkit/cre-templates layout).
+# Every RPC below is public and key-less; no private key material is stored
+# anywhere in this repository.
+staging-settings:
+  rpcs:
+    - chain-name: ethereum-mainnet
+      url: https://ethereum.publicnode.com
+    - chain-name: bnb-chain-mainnet
+      url: https://bsc-dataseed.binance.org
+
+production-settings:
+  rpcs:
+    - chain-name: ethereum-mainnet
+      url: https://ethereum.publicnode.com
+    - chain-name: bnb-chain-mainnet
+      url: https://bsc-dataseed.binance.org
