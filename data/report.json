@@ -1,15 +1,15 @@
 {
  "timestamp": "",
- "reserve_btc": 20095612,
+ "reserve_btc": 20096415,
  "wrapped_by_chain": {
   "bsc": 65300.96996478413,
   "ethereum": 116132.18273262
  },
  "wrapped_total_btc": 181433.15269740415,
- "coverage_ratio": 110.76041892694023,
- "reserve_price_usd": 82683,
- "spot_price_usd": 82724.39,
- "price_deviation_pct": 0.05005865776519891,
+ "coverage_ratio": 110.7648447994341,
+ "reserve_price_usd": 82977,
+ "spot_price_usd": 83061.76,
+ "price_deviation_pct": 0.10214878821841566,
  "checks": [
   {
    "id": "identity.ethereum",
@@ -52,8 +52,8 @@
    "pass": true,
    "detail": {
     "min_coverage": 1,
-    "observed_coverage": 110.76041892694023,
-    "reserve_btc": 20095612,
+    "observed_coverage": 110.7648447994341,
+    "reserve_btc": 20096415,
     "rule": "BTC circulating supply / total wrapped BTC \u003e= MinCoverageRatio",
     "wrapped_btc": 181433.15269740415
    }
@@ -62,14 +62,14 @@
    "id": "price_agreement",
    "pass": true,
    "detail": {
-    "binance_usd": 82724.39,
-    "coingecko_usd": 82683,
+    "binance_usd": 83061.76,
+    "coingecko_usd": 82977,
     "max_deviation": 0.5,
-    "observed_pct": 0.05005865776519891,
+    "observed_pct": 0.10214878821841566,
     "rule": "Binance vs CoinGecko spot deviation \u003c= MaxPriceDeviationPct"
    }
   }
  ],
  "pass": true,
- "trail_head": "0af26a3aabfb9c38"
+ "trail_head": "2f2d15e8fcace8d0"
 }

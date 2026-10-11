@@ -198,3 +198,37 @@ func TestRunFailsWhenClaimsExceedReserve(t *testing.T) {
 		}
 	}
 }
+
+func TestRPCFallbackWhenPrimaryFails(t *testing.T) {
+	secondary := fakeChainRPC("WBTC", 8, 11_613_218_273_262)
+	rest := fakeHTTP(0, 0, 20_095_612, 82_000, 82_000) // serves CoinGecko + Binance
+	client := &Client{
+		HTTP: roundTrip(func(req *http.Request) (*http.Response, error) {
+			switch {
+			case strings.Contains(req.URL.Host, "primary"):
+				return nil, fmt.Errorf("primary endpoint down")
+			case strings.Contains(req.URL.Host, "secondary"):
+				return secondary.Do(req)
+			default:
+				return rest.Do(req)
+			}
+		}),
+		Chains: []Chain{{Name: "ethereum", RPC: "https://primary.invalid",
+			AltRPC: []string{"https://secondary.example"}, Token: DefaultChains[0].Token,
+			ExpectSymbol: "WBTC"}},
+		CoinGecko: "https://api.coingecko.com/x",
+		Binance:   "https://api.binance.com/x",
+	}
+	res, err := client.Run(context.Background())
+	if err != nil {
+		t.Fatalf("expected fallback to succeed, got %v", err)
+	}
+	if res.Report.WrappedByChain["ethereum"] != 116_132.18273262 {
+		t.Fatalf("fallback supply = %v", res.Report.WrappedByChain["ethereum"])
+	}
+	for _, raw := range res.Raw {
+		if raw.RPC != "https://secondary.example" {
+			t.Fatalf("evidence must record the endpoint that served, got %q", raw.RPC)
+		}
+	}
+}

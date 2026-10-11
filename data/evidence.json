@@ -1,17 +1,17 @@
 [
  {
-  "fetched_at": "2026-10-09T16:44:29Z",
-  "id": "589902756b29c7e63a859bb0ff24d4b81c553fc04426fdd02cee7e39e896c9a5",
+  "fetched_at": "2026-10-11T08:15:30Z",
+  "id": "5a529245fe4c7e9ceb4b1d3e52637e8991386a137999e911d778deed29736a08",
   "kind": "reserve.coingecko",
   "payload": {
-   "circulating_supply": 20095612,
-   "usd": 82683
+   "circulating_supply": 20096415,
+   "usd": 82977
   },
   "source": "CoinGecko public API",
   "url": "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd\u0026ids=bitcoin"
  },
  {
-  "fetched_at": "2026-10-09T16:44:29Z",
+  "fetched_at": "2026-10-11T08:15:30Z",
   "id": "3a5192dd44f5589a195a7794233e4098e38f21d456ee9ad1dc08bd4ca45163e9",
   "kind": "supply.onchain",
   "payload": {
@@ -25,7 +25,7 @@
   "url": "https://ethereum.publicnode.com"
  },
  {
-  "fetched_at": "2026-10-09T16:44:29Z",
+  "fetched_at": "2026-10-11T08:15:30Z",
   "id": "1a4eb5e0e4bd4ce7e2995c0f30704f14fe90e833b1019fe6a5f30105dafee7ed",
   "kind": "supply.onchain",
   "payload": {
@@ -39,17 +39,17 @@
   "url": "https://bsc-dataseed.binance.org"
  },
  {
-  "fetched_at": "2026-10-09T16:44:29Z",
-  "id": "22af1c9c5f0766e61b9d1b9bcd702f5b79690d464ff4f980a143bd707a0b0dab",
+  "fetched_at": "2026-10-11T08:15:30Z",
+  "id": "cddada9cbb3b3b8aec8f787c523274d933634f44985b38bd679d311dbf55fbf9",
   "kind": "price.binance",
   "payload": {
-   "last_price": 82724.39
+   "last_price": 83061.76
   },
   "source": "Binance public REST",
   "url": "https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT"
  },
  {
-  "fetched_at": "2026-10-09T16:44:29Z",
+  "fetched_at": "2026-10-11T08:15:30Z",
   "id": "59d591657a453b217c35d8f249b81b89cb9e38d2cc9a8c72f60876a57f23630e",
   "kind": "rpc.eth_call",
   "payload": {
@@ -64,7 +64,7 @@
   "url": "https://ethereum.publicnode.com"
  },
  {
-  "fetched_at": "2026-10-09T16:44:29Z",
+  "fetched_at": "2026-10-11T08:15:30Z",
   "id": "512966830ebf4bcc2207bb635c08b6b3a600373a42c8eb4584e0f057b8b12f0a",
   "kind": "rpc.eth_call",
   "payload": {

@@ -38,6 +38,9 @@ const (
 type Chain struct {
 	Name string `json:"chain"`
 	RPC  string `json:"rpc"`
+	// AltRPC lists fallback public endpoints, tried in order when the primary
+	// fails (public RPCs are occasionally down or TLS-throttled).
+	AltRPC []string `json:"alt_rpc,omitempty"`
 	// Token is the wrapped-BTC contract address on that chain.
 	Token string `json:"token"`
 	// ExpectSymbol is what symbol() must return - an address/identity check.
@@ -48,9 +51,11 @@ type Chain struct {
 // Addresses are verified at runtime by reading symbol() on-chain.
 var DefaultChains = []Chain{
 	{Name: "ethereum", RPC: "https://ethereum.publicnode.com",
-		Token: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", ExpectSymbol: "WBTC"},
+		AltRPC: []string{"https://eth.llamarpc.com"},
+		Token:  "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", ExpectSymbol: "WBTC"},
 	{Name: "bsc", RPC: "https://bsc-dataseed.binance.org",
-		Token: "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c", ExpectSymbol: "BTCB"},
+		AltRPC: []string{"https://bsc-rpc.publicnode.com"},
+		Token:  "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c", ExpectSymbol: "BTCB"},
 }
 
 // CoinGeckoURL returns the public market snapshot for BTC.
@@ -99,13 +104,13 @@ type RawCall struct {
 	Result string `json:"result"`
 }
 
-func (c *Client) ethCall(ctx context.Context, chain Chain, method, data string) (string, error) {
+func (c *Client) ethCallOnce(ctx context.Context, rpcURL string, chain Chain, data string) (string, error) {
 	payload := map[string]any{
 		"jsonrpc": "2.0", "id": 1, "method": "eth_call",
 		"params": []any{map[string]string{"to": chain.Token, "data": data}, "latest"},
 	}
 	body, _ := json.Marshal(payload)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, chain.RPC, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, rpcURL, bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}
@@ -113,7 +118,7 @@ func (c *Client) ethCall(ctx context.Context, chain Chain, method, data string) 
 	req.Header.Set("User-Agent", "cre-por/1.0 (proof-of-reserve workflow)")
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("%s rpc: %w", chain.Name, err)
+		return "", fmt.Errorf("%s rpc %s: %w", chain.Name, rpcURL, err)
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -134,6 +139,30 @@ func (c *Client) ethCall(ctx context.Context, chain Chain, method, data string) 
 		return "", fmt.Errorf("%s rpc: %s (%d)", chain.Name, out.Error.Message, out.Error.Code)
 	}
 	return out.Result, nil
+}
+
+// ethCall tries the primary endpoint and then each fallback, one retry each,
+// and reports which endpoint served the answer (recorded in the evidence).
+func (c *Client) ethCall(ctx context.Context, chain Chain, method, data string) (string, string, error) {
+	endpoints := append([]string{chain.RPC}, chain.AltRPC...)
+	var errs []string
+	for _, rpcURL := range endpoints {
+		for attempt := range 2 {
+			if attempt > 0 {
+				select {
+				case <-ctx.Done():
+					return "", "", ctx.Err()
+				case <-time.After(2 * time.Second):
+				}
+			}
+			res, err := c.ethCallOnce(ctx, rpcURL, chain, data)
+			if err == nil {
+				return res, rpcURL, nil
+			}
+			errs = append(errs, err.Error())
+		}
+	}
+	return "", "", fmt.Errorf("all endpoints failed: %s", strings.Join(errs, " | "))
 }
 
 // decodeUintABI parses a 32-byte word result as an arbitrary-precision
@@ -215,13 +244,15 @@ type TokenRead struct {
 func (c *Client) ReadToken(ctx context.Context, chain Chain) (TokenRead, error) {
 	read := TokenRead{RawCall: RawCall{Chain: chain.Name, RPC: chain.RPC, To: chain.Token}}
 	var err error
-	if read.Result, err = c.ethCall(ctx, chain, "symbol", selSymbol); err != nil {
+	var used string
+	if read.Result, used, err = c.ethCall(ctx, chain, "symbol", selSymbol); err != nil {
 		return read, err
 	}
+	read.RPC = used
 	read.Method = "symbol()"
 	read.Data = selSymbol
 	read.Symbol = decodeStringABI(read.Result)
-	if read.Result, err = c.ethCall(ctx, chain, "decimals", selDecimals); err != nil {
+	if read.Result, _, err = c.ethCall(ctx, chain, "decimals", selDecimals); err != nil {
 		return read, err
 	}
 	d, err := decodeUintABI(read.Result)
@@ -231,7 +262,7 @@ func (c *Client) ReadToken(ctx context.Context, chain Chain) (TokenRead, error) 
 	read.Method = "decimals()"
 	read.Data = selDecimals
 	read.Decimals = int(d.Int64())
-	if read.Result, err = c.ethCall(ctx, chain, "totalSupply", selTotalSupply); err != nil {
+	if read.Result, _, err = c.ethCall(ctx, chain, "totalSupply", selTotalSupply); err != nil {
 		return read, err
 	}
 	read.Method = "totalSupply()"
